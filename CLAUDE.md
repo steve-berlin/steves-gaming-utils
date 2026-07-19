@@ -50,6 +50,18 @@ Drops `/etc/sysctl.d/99-nic-tuning.conf` (BBR + fq, larger buffers, TFO, MTU pro
 
 Split is deliberate: this script only writes zero-power-cost settings. Energy-hungry settings (WiFi `power_save=0`, ethernet EEE off) cost battery *exactly when traffic is low* — those live in `nic-boost` (opt-in per session, revert on reboot). Dispatcher bails early on wifi (`exit 0` if `/sys/class/net/$iface/wireless` exists) — ethernet-only on purpose.
 
+### `fix-roblox-waydroid.sh` — spoof a Waydroid container so Roblox runs
+
+Roblox's Hyperion (Byfron) anticheat rejects emulator-looking / uncertified devices. This writes Pixel-5 (`redfin`) build props + emulator-hiding + SafetyNet hints into `/var/lib/waydroid/waydroid_base.prop` (persistent — read at container start), plus `persist.waydroid.fake_touch`/`fake_wifi` runtime props, then restarts the container. Companion to the `rbx` launcher. Modes: bare / `--uninstall` (== `--revert`) / `--dry-run`. Root-required; hard-fails without it.
+
+- **Spoof-only by design.** ARM translation (`libhoudini`) is a one-time prereq installed by `discontinued/install-roblox.sh` / `waydroid_script` — this script only *checks* for it and warns if absent (Roblox is arm64; x86_64 needs the bridge). Merged from two earlier duplicate scripts (an install+spoof one and a spoof-only one).
+- **No GApps.** The container is deliberately GApps-free; the APK comes from Uptodown via `install-roblox-uptodown.sh`, not the Play Store. So no Play-Services dependency and ~300 MB saved.
+- **First backup only.** Copies `waydroid_base.prop` to `/var/lib/waydroid/.roblox-fix-backup` once; `--uninstall` restores it and blanks every prop the script set. Build props are written idempotently (`sed` in place if the key exists, else append).
+
+### `install-roblox-uptodown.sh` — install the Roblox APK into Waydroid from Uptodown
+
+Minimal APK installer: resolves the latest Roblox APK off the Uptodown download page (grabs the first `dl.uptodown.com` link), downloads it, and `waydroid app install`s it. Arg forms: a local `<file.apk>`, a direct `<url>`, or nothing (auto-resolve). Override the source page with `UPTODOWN_URL`. `--dry-run`-able. Run `fix-roblox-waydroid.sh` first (device spoof) and have a **running** Waydroid session (`waydroid app install` needs one — warns if absent). Uptodown HTML shifts periodically; on a resolve miss it tells you to pass a file/URL by hand rather than guessing.
+
 ---
 
 ## debloat_scripts/debloat-redmi.sh — disable LineageOS preinstalled apps on a Redmi 4A
