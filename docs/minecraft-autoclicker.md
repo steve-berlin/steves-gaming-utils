@@ -73,7 +73,12 @@ Single-player or your own server: nobody cares. Public servers often ban macros
 - **`pyautogui.PAUSE = 0`** — library otherwise sleeps 0.1 s after *every* call,
   making a 2 s hold really 2.1 s. We do our own timing.
 - **`try / except KeyboardInterrupt / finally`** — `finally` runs however the
-  loop ends (done, Ctrl+C, crash), so `mouseUp()` always happens.
+  loop ends (done, Ctrl+C, crash), so the button release always happens.
+- **Click through Xlib, not `pyautogui.mouseDown()`** — pyautogui secretly
+  "moves" the pointer to where it thinks it is before every press and release.
+  Minecraft locks the mouse and turns every move into camera turn, so those
+  fake moves slowly tipped your view toward the floor. Bare XTEST button
+  events have no move attached; camera stays put.
 - **`while total is None or done < total`** — one loop serves "100 times" and
   "forever". Old version had two near-copies and the endless one was unreachable.
 - **Blank slot prompt has no default** — blank is itself a real answer ("don't

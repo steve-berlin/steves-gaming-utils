@@ -14,8 +14,24 @@ from itertools import cycle
 from time import sleep
 
 import pyautogui
+from Xlib import X
+from Xlib.display import Display
+from Xlib.ext.xtest import fake_input
 
 pyautogui.PAUSE = 0  # drop pyautogui's implicit 0.1 s delay after every call
+
+# pyautogui.mouseDown/mouseUp re-read position() and fake a MotionNotify to it
+# before every button event. Minecraft grabs the pointer and reads relative
+# motion, so each warp to that stale point turns the camera; it adds up and the
+# player ends up staring at the floor. Send bare button events instead.
+_display = Display()
+LEFT = 1
+
+
+def button(event: int) -> None:
+    fake_input(_display, event, LEFT)
+    _display.sync()
+
 
 HOTBAR = set("123456789")
 
@@ -92,15 +108,16 @@ def main() -> int:
         while total is None or done < total:
             if slot_iter and done % every == 0:
                 pyautogui.press(next(slot_iter))
-            pyautogui.mouseDown()
+            pyautogui.failSafeCheck()  # bare XTEST skips pyautogui's own check
+            button(X.ButtonPress)
             sleep(hold)
-            pyautogui.mouseUp()
+            button(X.ButtonRelease)
             sleep(rest)
             done += 1
     except KeyboardInterrupt:
         pass
     finally:
-        pyautogui.mouseUp()  # never leave the button stuck down
+        button(X.ButtonRelease)  # never leave the button stuck down
     print(f"\n{done} cycles done")
     return 0
 

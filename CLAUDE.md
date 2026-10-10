@@ -145,10 +145,11 @@ In `~/.zshrc`: `alias skl='sudo systemctl stop tlp; sudo sysctl vm.swappiness=10
 
 ## minecraft-autoclicker.py — hold-click loop + hotbar re-equip
 
-Interactive prompts (hold s, rest s, slots, cycles-per-slot, total cycles), then `mouseDown`/`sleep`/`mouseUp`/`sleep` in one loop. Slots rotate via `itertools.cycle`, one `pyautogui.press` every N cycles. Single file, one dep (`pyautogui` — `apt install python3-pyautogui`, PEP 668 blocks system pip). ELI11 walkthrough in `docs/minecraft-autoclicker.md`.
+Interactive prompts (hold s, rest s, slots, cycles-per-slot, total cycles), then XTEST press/`sleep`/release/`sleep` in one loop. Slots rotate via `itertools.cycle`, one `pyautogui.press` every N cycles. Single file, one dep (`pyautogui` — `apt install python3-pyautogui`, PEP 668 blocks system pip). ELI11 walkthrough in `docs/minecraft-autoclicker.md`.
 
 - **`pyautogui.PAUSE = 0`, explicit `sleep` instead.** `PAUSE` is one global applied after *every* call, so it can't hold both hold and rest; `PAUSE=hold` would also delay each re-equip `press`. Per-call reassignment = mutating a module global in the hot loop for zero gain (`_autoPause` is `time.sleep` underneath).
-- **`mouseUp()` in `finally`.** Dying mid-hold leaves the button stuck down. `except KeyboardInterrupt` makes Ctrl+C the clean exit; pyautogui FAILSAFE (pointer to top-left) is the second out.
+- **Button events via raw XTEST (`Xlib.ext.xtest.fake_input`), not `pyautogui.mouseDown/mouseUp`.** pyautogui 0.9.54 reads `position()` and fakes a `MotionNotify` to it before every button event. Minecraft grabs the pointer + reads relative motion, so each warp to the stale point is a camera nudge; summed over cycles the player ends up looking at the floor. `python-xlib` is already pyautogui's Linux backend. `failSafeCheck()` called by hand since the bypass skips it. `press()` for hotbar keys is fine — no motion.
+- **Release in `finally`.** Dying mid-hold leaves the button stuck down. `except KeyboardInterrupt` makes Ctrl+C the clean exit; pyautogui FAILSAFE (pointer to top-left) is the second out.
 - **Slot prompt deliberately has no default.** `ask()` returns its default on blank input, and blank *is* the "no re-equip" answer — a default there makes "no" unreachable. Found by test, not review.
 - **Wayland caveat.** Box session is `wayland`; pyautogui fakes input over X11 XTEST. XWayland clients (Minecraft Java default) work; a native-Wayland game silently gets nothing. `ydotool` is the kernel-level fallback — not used, needs a daemon + root-ish perms.
 - Was unrunnable before: `from pyautogui`, `for … range(1, iRep)` missing `:`, `int("")` on skipped prompts, dead `if iRep is None` (`input()` returns `""`). Seconds are `float` now, so sub-second timing works.
