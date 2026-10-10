@@ -41,47 +41,20 @@ def ask(prompt: str, default: str = "") -> str:
     return input(f"{prompt}{shown}: ").strip() or default
 
 
-def ask_float(prompt: str, default: str) -> float:
+def ask_num(prompt: str, default: str = "", kind: type = int, minimum: float = 1):
+    """No default means blank is a real answer (endless) and returns None."""
     while True:
-        try:
-            value = float(ask(prompt, default))
-        except ValueError:
-            print("  need a number")
-            continue
-        if value < 0:
-            print("  need >= 0")
-            continue
-        return value
-
-
-def ask_int(prompt: str, default: str, minimum: int = 1) -> int:
-    while True:
-        try:
-            value = int(ask(prompt, default))
-        except ValueError:
-            print("  need a whole number")
-            continue
-        if value < minimum:
-            print(f"  need >= {minimum}")
-            continue
-        return value
-
-
-def ask_opt_int(prompt: str, minimum: int = 1) -> int | None:
-    """Blank means endless, so this prompt deliberately has no default."""
-    while True:
-        raw = ask(prompt)
+        raw = ask(prompt, default)
         if not raw:
             return None
         try:
-            value = int(raw)
+            value = kind(raw)
         except ValueError:
-            print("  need a whole number, or blank")
+            print(f"  need a {'whole ' if kind is int else ''}number")
             continue
-        if value < minimum:
-            print(f"  need >= {minimum}, or blank")
-            continue
-        return value
+        if value >= minimum:
+            return value
+        print(f"  need >= {minimum}")
 
 
 def ask_slots(prompt: str) -> list[str]:
@@ -96,17 +69,17 @@ def ask_slots(prompt: str) -> list[str]:
 
 
 def main() -> int:
-    hold = ask_float("hold seconds", "2")
-    rest = ask_float("rest seconds", "1")
+    hold = ask_num("hold seconds", "2", float, 0)
+    rest = ask_num("rest seconds", "1", float, 0)
     slots = ask_slots("hotbar slots to rotate e.g. 1,2, blank for none")
-    every = ask_int("cycles per slot before re-equip", "1") if slots else 0
-    total = ask_opt_int("total cycles, blank for endless")
+    every = ask_num("cycles per slot before re-equip", "1") if slots else 0
+    total = ask_num("total cycles, blank for endless")
 
-    slot_iter = cycle(slots) if slots else None
+    slot_iter = cycle(slots)
     done = 0
     try:
         while total is None or done < total:
-            if slot_iter and done % every == 0:
+            if slots and done % every == 0:
                 pyautogui.press(next(slot_iter))
             pyautogui.failSafeCheck()  # bare XTEST skips pyautogui's own check
             button(X.ButtonPress)
