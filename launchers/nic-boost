@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Re-exec under bash if invoked as `sh nic-boost` — uses bashisms.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
+# nic-boost — per-session network latency boost, at a battery cost.
+# Companion to install-nic-tuning.sh, which handles the permanent,
+# zero-power-cost settings. The two tweaks here save power exactly when
+# traffic is idle, so they are opt-in and revert on reboot.
+#
+#   WiFi power_save off  — the card stops dozing between beacons, which
+#                          removes 10-200 ms of wake-up latency per burst.
+#   Ethernet EEE off     — Energy-Efficient Ethernet idles the PHY between
+#                          frames; waking it adds latency and some switches
+#                          negotiate it badly enough to drop link.
+
+set -euo pipefail
+
+# ethtool/iw live in /usr/sbin; interactive bash on Debian doesn't put sbin
+# dirs on a non-root user's PATH, so `command -v` misses them.
+PATH=$PATH:/usr/sbin:/sbin
+
+mode=boost; dry=0
+for a in "$@"; do
+  case $a in
+    --revert)  mode=revert ;;
+    --dry-run) dry=1 ;;
+    -h|--help) sed -n '6,15p' "$0"; echo "Usage: $0 [--revert] [--dry-run]"; exit 0 ;;
+    *) echo "error: unknown arg: $a" >&2; exit 2 ;;
+  esac
+done
+
+run()  { (( dry )) && printf 'DRY  %s\n' "$*" || "$@"; }
+have() { command -v "$1" >/dev/null; }
+
+# Detect ifaces. Same filter as install-nic-tuning.sh: skip loopback and
+# virtual devices by name, then keep only what has a real driver — which is
+# what excludes bridges (lxcbr0) and VPN tunnels (nordlynx), since those pass
+# the name test but have no device/driver link.
+eth=() wifi=()
+for i in /sys/class/net/*; do
+  n=${i##*/}
+  [[ $n == lo || $n == vir* || $n == docker* || $n == br-* || $n == wwan* ]] && continue
+  if [[ -d $i/wireless ]]; then wifi+=("$n")
+  elif [[ -e $i/device/driver ]]; then eth+=("$n"); fi
+done
+echo "ethernet: ${eth[*]:-none}    wifi: ${wifi[*]:-none}"
+
+if [[ $mode == revert ]]; then
+  ps=on; eee=on
+else
+  ps=off; eee=off
+fi
+
+# WiFi: iw is the modern tool; iwconfig is the wireless-tools fallback, and
+# its argument order is inverted (power off == power_save off).
+for n in "${wifi[@]}"; do
+  if have iw; then
+    run sudo iw dev "$n" set power_save "$ps" || echo "warn: $n: power_save $ps rejected"
+  elif have iwconfig; then
+    run sudo iwconfig "$n" power "$ps" || echo "warn: $n: power $ps rejected"
+  else
+    echo "warn: neither iw nor iwconfig on PATH — skipped $n"
+  fi
+done
+
+# Ethernet: not every NIC implements EEE, and ethtool exits non-zero when it
+# doesn't. That is not a failure worth aborting on, so warn and continue.
+for n in "${eth[@]}"; do
+  if have ethtool; then
+    run sudo ethtool --set-eee "$n" eee "$eee" || echo "warn: $n: no EEE support"
+  else
+    echo "warn: ethtool not on PATH — skipped $n"
+  fi
+done
+
+if [[ $mode == revert ]]; then
+  echo "reverted. Power saving back on."
+else
+  echo "boosted. Reverts on reboot, or now with: $0 --revert"
+fi

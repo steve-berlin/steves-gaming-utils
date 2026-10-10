@@ -17,7 +17,7 @@ SYSCTL=/etc/sysctl.d/99-nic-tuning.conf
 DISPATCHER=/etc/NetworkManager/dispatcher.d/99-nic-tuning
 LAUNCHER_DST=$HOME/.local/bin/nic-boost
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-LAUNCHER_SRC=$SCRIPT_DIR/../launchers/nic-boost
+LAUNCHER_SRC=$SCRIPT_DIR/launchers/nic-boost
 
 mode=install; dry=0
 for a in "$@"; do

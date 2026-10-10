@@ -19,15 +19,17 @@ Roblox order: spoof, start session, install APK.
 
 ## Launchers (`launchers/`)
 
-Copy to `~/.local/bin/`. Each applies the same session performance profile
-first — TLP stopped, `vm.swappiness=10`, governor `performance` — all reverting
-on reboot. Assumes `sudo` is NOPASSWD for exactly those three commands.
+Copy to `~/.local/bin/`. Each game launcher applies the same session
+performance profile first — TLP stopped, `vm.swappiness=10`, governor
+`performance` — all reverting on reboot. Assumes `sudo` is NOPASSWD for exactly
+those three commands. (`nic-boost` is the exception; it only touches the NIC.)
 
 | Launcher | Launches |
 |---|---|
 | `stm` | Steam, after registering `/games/steam` as a library. Deliberately not `gamemoderun`-wrapped — use `gamemoderun %command%` per game. |
 | `rbx` | Roblox on Waydroid: container, nested weston on X11, session, app launch. Package via `$RBX_PKG`. |
 | `rbxvm` | The Roblox Android-x86 VM under QEMU/KVM, from `discontinued/install-android-vm.sh`. |
+| `nic-boost` | Not a game launcher: turns WiFi power-save and ethernet EEE off for lower latency, at a battery cost. `--revert`, or reboot. Deployed by `install-nic-tuning.sh`. |
 
 Minecraft uses a zsh alias instead, `skl` — same three sudo lines, then
 `gamemoderun java -jar ~/Desktop/SKlauncher-3.2.18.jar --workDir /games/minecraft`.

@@ -81,7 +81,7 @@ Gotchas — do not reintroduce:
 
 ## launchers/
 
-Per-run wrappers; drop in `~/.local/bin/` (on PATH from `~/.zshrc`). Every launcher (and the `skl` alias) runs the **shared perf profile** first: `sudo systemctl stop tlp` (disable throttling); `sudo sysctl vm.swappiness=10`; `sudo cpupower frequency-set -g performance`. Reverted on next boot (TLP comes back via systemd; kernel resets defaults). Gaming-only, no permanent change.
+Per-run wrappers; drop in `~/.local/bin/` (on PATH from `~/.zshrc`). Every *game* launcher (and the `skl` alias) runs the **shared perf profile** first — `nic-boost` and `redmi-gaming` are toggles, not launchers, and skip it: `sudo systemctl stop tlp` (disable throttling); `sudo sysctl vm.swappiness=10`; `sudo cpupower frequency-set -g performance`. Reverted on next boot (TLP comes back via systemd; kernel resets defaults). Gaming-only, no permanent change.
 
 ### `stm` — Steam launcher
 
@@ -117,6 +117,12 @@ Gotchas — do not reintroduce:
 - **Don't drop the ISO heuristic for always-on `-cdrom`.** Stray reboot would land in installer GRUB and wipe the guest. Use `RBXVM_FORCE_ISO=1` for manual override.
 - **Graphics fallback is manual.** Hang at splash → swap `virtio-vga-gl` + `gtk,gl=on` for `VGA` + `gtk` (software, Roblox tanks but boots). Failure mode is "hang", no clean signal.
 - **`virtio-tablet`** required — Android-x86's relative-input is rough.
+
+### `nic-boost` — apply/revert the battery-costing NIC tweaks
+
+WiFi `power_save off` (`iw dev … set power_save`, `iwconfig … power` fallback with inverted arg naming) + ethernet `--set-eee … eee off`. Opt-in because both save power precisely when traffic is idle; permanent zero-cost settings live in `install-nic-tuning.sh` instead. `--revert` flips both back; reboot does too. Iface filter is copied from the installer — name-skip plus a `device/driver` existence test, which is what drops `lxcbr0` and `nordlynx` (they pass the name test), with `wwan*` skipped by name here. Not every NIC implements EEE and `ethtool` exits non-zero when it doesn't, so that call warns rather than aborting under `set -e`.
+
+Was missing from the repo entirely until 2026-10-10 while `install-nic-tuning.sh` already deployed it: `LAUNCHER_SRC` also pointed at `$SCRIPT_DIR/../launchers/nic-boost`, one level above the repo, left over from the pre-split layout. Install silently printed `warn: … not found` and skipped.
 
 ### `redmi-gaming` — apply/revert gaming profile on a connected Redmi 4A
 
