@@ -1,20 +1,21 @@
-# Gaming utilities (archived)
+# Gaming utilities
 
-The scripts described below **no longer live in this repo.** As of commit
-`592ca4c` (2026-06-07) they were split out:
+This repo (`steves-gaming-utils`) holds the Linux gaming scripts: Steam / The
+Long Dark / scrcpy / NIC tuning installers at the root, `stm` / `rbx` / `rbxvm`
+in `launchers/`, Waydroid + Android-x86 VM setup in `discontinued/`, and the
+Minecraft autoclicker. Split out of `steves-debian-setup` at commit `592ca4c`
+(2026-06-07); the Redmi 4A debloater + `redmi-gaming` launcher went to
+**[steves-redmi-setup](https://github.com/steve-berlin/steves-redmi-setup)**
+instead.
 
-- Steam / The Long Dark / scrcpy / NIC tuning installers + `stm` / `rbx` /
-  `rbxvm` launchers + `skl` Minecraft alias + Waydroid/Android-x86 VM
-  setup → **[steves-gaming-utils](https://github.com/steve-berlin/steves-gaming-utils)**
-- Redmi 4A debloater + `redmi-gaming` launcher → **[steves-redmi-setup](https://github.com/steve-berlin/steves-redmi-setup)**
-
-These notes are kept here as institutional knowledge — gotchas, ordering
-constraints, and "why" decisions that don't survive in commit messages.
-For deploy detail consult the moved repos' own `CLAUDE.md`/`README.md`.
+This file is the institutional knowledge — gotchas, ordering constraints and
+"why" decisions that don't survive in commit messages. `README.md` is the
+user-facing index; `docs/` holds per-script ELI walkthroughs. Deployed state on
+this box (disk layout, `~/.local/bin` wrappers) lives in `~/CLAUDE.md`.
 
 ## Gaming partitions
 
-`/games/steam` (sda3) + `/games/minecraft` (sda4) mounted via `/etc/fstab`. Launchers + `gaming/install-tld.sh` hard-code those paths; edit constants at script top on a different box. See `~/CLAUDE.md` for disk layout and why Steam itself stays in `~/.steam` while only game *content* lives on `/games/steam`.
+`/games/steam` (sda3) + `/games/minecraft` (sda4) mounted via `/etc/fstab`. Launchers + `install-tld.sh` hard-code those paths; edit constants at script top on a different box. See `~/CLAUDE.md` for disk layout and why Steam itself stays in `~/.steam` while only game *content* lives on `/games/steam`.
 
 ## VM / container runtime data (not committed)
 
@@ -24,7 +25,7 @@ For deploy detail consult the moved repos' own `CLAUDE.md`/`README.md`.
 
 ---
 
-## installers/gaming/
+## installers (repo root)
 
 ### `install-steam.sh` — Steam from apt + non-free
 
@@ -64,7 +65,7 @@ Minimal APK installer: resolves the latest Roblox APK off the Uptodown download 
 
 ---
 
-## debloat_scripts/debloat-redmi.sh — disable LineageOS preinstalled apps on a Redmi 4A
+## debloat-redmi.sh — Redmi 4A (lives in steves-redmi-setup, notes kept here)
 
 Drives ADB to `pm disable-user --user 0` a curated list on a connected Redmi 4A (`rolex`). No root, no bootloader unlock; every action reversible with `--restore`. Modes: bare (SAFE list), `--include-optional`, `--restore`, `--list-only`, `--dry-run`. Preflight hard-fails: `adb` on PATH; exactly one authorized device (multi-device → prints serials, set `ANDROID_SERIAL`); `getprop ro.product.device` == `rolex`.
 
@@ -101,7 +102,7 @@ Order matters — the X11/weston step must land before session start, else the s
 
 ### `rbxvm` — Android-x86 VM launcher (Roblox)
 
-Boots the Roblox-only Android-x86 VM provisioned by `installers/discontinued/install-android-vm.sh`. Apply perf profile (skipped under `RBXVM_DRY=1` — non-TTY sudo prompt would block), then `exec qemu-system-x86_64` under KVM. Preflight hard-fails on missing `qemu-system-x86_64`/`qemu-img`/`sudo`/`systemctl`/`stat`, missing `/dev/kvm`, or missing `$ANDROID_VM_DIR/disk.qcow2` — no silent fallback to TCG.
+Boots the Roblox-only Android-x86 VM provisioned by `discontinued/install-android-vm.sh`. Apply perf profile (skipped under `RBXVM_DRY=1` — non-TTY sudo prompt would block), then `exec qemu-system-x86_64` under KVM. Preflight hard-fails on missing `qemu-system-x86_64`/`qemu-img`/`sudo`/`systemctl`/`stat`, missing `/dev/kvm`, or missing `$ANDROID_VM_DIR/disk.qcow2` — no silent fallback to TCG.
 
 QEMU flags: `-cpu host -smp 4 -m 4096 -machine q35`; `virtio` disk with `discard=unmap`; `virtio-vga-gl` + `-display gtk,gl=on` for iGPU GL passthrough; `virtio-tablet` for absolute mouse; `intel-hda` + `hda-output` over `-audiodev pa,…` (PipeWire PA compat); `virtio-net` user-mode NAT with hostfwd loopback `5555` → guest `5555`.
 
@@ -136,7 +137,19 @@ In `~/.zshrc`: `alias skl='sudo systemctl stop tlp; sudo sysctl vm.swappiness=10
 
 ---
 
-## installers/discontinued/ — Roblox / Android-x86 VM setup
+## minecraft-autoclicker.py — hold-click loop + hotbar re-equip
+
+Interactive prompts (hold s, rest s, slots, cycles-per-slot, total cycles), then `mouseDown`/`sleep`/`mouseUp`/`sleep` in one loop. Slots rotate via `itertools.cycle`, one `pyautogui.press` every N cycles. Single file, one dep (`pyautogui` — `apt install python3-pyautogui`, PEP 668 blocks system pip). ELI11 walkthrough in `docs/minecraft-autoclicker.md`.
+
+- **`pyautogui.PAUSE = 0`, explicit `sleep` instead.** `PAUSE` is one global applied after *every* call, so it can't hold both hold and rest; `PAUSE=hold` would also delay each re-equip `press`. Per-call reassignment = mutating a module global in the hot loop for zero gain (`_autoPause` is `time.sleep` underneath).
+- **`mouseUp()` in `finally`.** Dying mid-hold leaves the button stuck down. `except KeyboardInterrupt` makes Ctrl+C the clean exit; pyautogui FAILSAFE (pointer to top-left) is the second out.
+- **Slot prompt deliberately has no default.** `ask()` returns its default on blank input, and blank *is* the "no re-equip" answer — a default there makes "no" unreachable. Found by test, not review.
+- **Wayland caveat.** Box session is `wayland`; pyautogui fakes input over X11 XTEST. XWayland clients (Minecraft Java default) work; a native-Wayland game silently gets nothing. `ydotool` is the kernel-level fallback — not used, needs a daemon + root-ish perms.
+- Was unrunnable before: `from pyautogui`, `for … range(1, iRep)` missing `:`, `int("")` on skipped prompts, dead `if iRep is None` (`input()` returns `""`). Seconds are `float` now, so sub-second timing works.
+
+---
+
+## discontinued/ — Roblox / Android-x86 VM setup
 
 ### `install-roblox.sh` — interactive Waydroid + APK setup
 
