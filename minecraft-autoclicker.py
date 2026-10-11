@@ -20,17 +20,28 @@ from Xlib.ext.xtest import fake_input
 
 pyautogui.PAUSE = 0  # drop pyautogui's implicit 0.1 s delay after every call
 
-# pyautogui.mouseDown/mouseUp re-read position() and fake a MotionNotify to it
-# before every button event. Minecraft grabs the pointer and reads relative
-# motion, so each warp to that stale point turns the camera; it adds up and the
-# player ends up staring at the floor. Send bare button events instead.
+# Why not pyautogui.mouseDown() / mouseUp()? Before each click they secretly
+# "move" the mouse to where they last saw it. In Minecraft, any mouse movement
+# turns the camera, so every click nudged the view a little. After many clicks
+# the player ended up looking at the floor. Instead we send only the button
+# press and release, with no movement, so the camera stays still.
+#
+# To do that we talk to X11 directly through Xlib, the same library pyautogui
+# uses under the hood on Linux. X11 is the system that draws windows and
+# passes mouse and keyboard input to them. _display is our connection to it.
+# XTEST is an X11 feature that lets a program pretend to be a real mouse.
 _display = Display()
-LEFT = 1
+LEFT = 1  # X11 numbers mouse buttons: 1 = left, 2 = middle, 3 = right
 
 
 def button(event: int) -> None:
+    """Press (X.ButtonPress) or release (X.ButtonRelease) the left button."""
+    # fake_input comes from XTEST. It tells X11 "act as if this happened on
+    # the real mouse or keyboard". Here we pass three things: our connection,
+    # what happened (press or release) and which button (LEFT). We give no
+    # position, so X11 clicks wherever the pointer already is and nothing moves.
     fake_input(_display, event, LEFT)
-    _display.sync()
+    _display.sync()  # send it now instead of waiting in a queue
 
 
 HOTBAR = set("123456789")
@@ -42,12 +53,21 @@ def ask(prompt: str, default: str = "") -> str:
 
 
 def ask_num(prompt: str, default: str = "", kind: type = int, minimum: float = 1):
-    """No default means blank is a real answer (endless) and returns None."""
+    """No default means blank is a real answer (endless) and returns None.
+
+    kind is what sort of number we want, and it's also the function that
+    turns the typed text into that number. Python's int and float both work
+    that way: int("3") gives 3, float("0.5") gives 0.5. Seconds use float so
+    half a second is allowed. Counts use int (the default), because "2.5
+    cycles" makes no sense.
+    """
     while True:
         raw = ask(prompt, default)
         if not raw:
             return None
         try:
+            # Same as int(raw) or float(raw). Text that isn't a number of that
+            # kind, like "abc" or "2.5" for int, raises ValueError.
             value = kind(raw)
         except ValueError:
             print(f"  need a {'whole ' if kind is int else ''}number")
